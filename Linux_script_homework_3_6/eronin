@@ -1,0 +1,150 @@
+#!/bin/bash
+#
+## Script shows information about environments, use of memory, disk spaces, etc
+## of the OS and also some statistics of directories.
+
+pipe_location=/var/local/eronin/notify_pipe
+NOW=$(date +"%a %d-%m-%Y %T")
+kill_count=0 # This variable is used in trap function
+LOG_DIR=/var/log/eronin
+LOG_OUT=$LOG_DIR/stdout.log
+LOG_ERR=$LOG_DIR/stderr.log
+LOG_EXEC=$LOG_DIR/trapout.log
+
+
+pipe_check() {
+  [[ -p $pipe_location ]] && echo "Script started" | tee $pipe_location
+}
+pipe_check
+
+## Command that tells what Process ID was given for script
+echo -e "\nPID is $$"
+###############################################################################
+## Describes how logs will be written
+## Arguments:
+##   environments function
+##   statistics function
+## Outputs:
+##   Writes outputs of functions to terminal and .log files
+###############################################################################
+logging() {
+  if   [ $2 = "to_out" ]; then
+    echo -e "\n$NOW : " >> $LOG_OUT
+    $1 | tee -a $LOG_OUT
+  elif [ $2 = "to_err" ]; then
+    echo $1
+    echo "$NOW : $1" >> $LOG_ERR
+  elif [ $2 = "to_exec" ]; then
+    echo $1
+    echo "$NOW - $(whoami) - is guilty" >> $LOG_EXEC
+  fi
+}
+
+###############################################################################
+## Funcion for trapping signals
+## Arguments:
+##   kill_count
+## Outputs:
+##   four alert messages to stdout
+## Returns:
+##  0 if all iterations passed
+###############################################################################
+handler() {
+  let kill_count++
+  echo
+  if [[ $kill_count == 1 ]]; then
+    echo "Do not do that."
+  elif [[ $kill_count == 2 ]]; then
+    echo "Please, stop."
+  elif [[ $kill_count == 3 ]]; then
+    echo "This is too important."
+  else
+    echo "That's it. You broke it."
+    logging "Simulation was broken" "to_exec"
+  exit 0
+  fi
+}
+## Trap command for catching SIGINT(2) and SIGTERM(15)
+trap handler SIGINT SIGTERM
+
+environments() {
+  echo -e "\nENVIRONMENT OUTPUT:"
+  printenv | grep -w SHELL
+  printenv | grep -w USER
+  printenv | grep PWD
+  printenv | grep -w PATH
+  echo -e "\nPROC AND MEMORY:"
+  echo "1.LAST 15 PROCESSES:"
+  ps -axo euser,ppid,pid,time,etime,%cpu,command | tail -n -5
+  echo -e "\n2.MEMORY USAGE:"
+  free -m | grep Mem | awk '{printf ("Use of RAM: %.2f%%, Out of:"$2"\n" ),  $3/$2*100}'
+  echo -e "\n3.USAGE OF DISK:"
+  du -hs * | sort -hr
+  echo -e "\n4.SPACE ON DISK:"
+  df -ah -t ext4
+}
+
+statistics() {
+  echo -e "\nSTATISTIC OUTPUT:"
+  echo "1.CURRENT DIR STAT:"
+  # Да и не логичнее было бы это с дисками совместить?
+  stat --printf='%n\npermissions\t%A\ntype\t\t%F\nuser\t\t%U\ngroup\t\t%G\nlast change\t%z\n' ./
+  echo -e "\n2.CURRENT DIR FILES:"
+  ls -liu ./
+  echo -e "\n3.SCRIPT LOGS QUANTITY OF LINES:"
+  find /var/log/eronin/ -name "*.log" -type f -exec wc -l {} \;
+}
+
+###############################################################################
+## Describes right way of using script
+## Arguments:
+##   name of the script
+## Outputs:
+##   writes instruction to stdout
+## Returns:
+##   0 after all echoes
+###############################################################################
+usage() {
+  echo -e "\nUsage: $1 OPTION"
+  echo -e "\t-b, --basic \tPrints environments"
+  echo -e "\t-s, --stat \tPrints statistics"
+  echo -e "\t-l, --load \tGives simulation of load"
+  echo -e "\t-h, --help \tFor help"
+  exit 0
+}
+
+###############################################################################
+## Simulation of load in script
+## Arguments:
+##   date
+##   stdout
+## Outputs:
+##   echo message of start to stdout
+##   writes a log in stdout.log
+## Returns:
+##   goes in cycle until kill signal
+###############################################################################
+loading() {
+  echo "$NOW - loading" >> $LOG_OUT
+  echo -e "\nSimulation's started"
+  while true; do
+    a=1
+  done
+}
+## Checks if there are some options, otherway runs usage function
+[[ $# -eq 0 ]] && usage $0
+## while/case constuction for pasring short and long options
+while [ $# -gt 0 ]
+do
+  case $1 in
+    -b | --basic) logging environments "to_out";;
+    -s | --stat)  logging statistics "to_out";;
+    -l | --load)  loading;;
+    -h | --help)  usage $0;;
+    -?)  logging "Unknown short option, view --help" "to_err";;
+    -*)  logging "Unknown short option, view --help" "to_err";;
+    --)  logging "Empty long option, view --help" "to_err";;
+   --*)  logging "Unknown long option, view --help" "to_err";;
+  esac
+  shift
+done

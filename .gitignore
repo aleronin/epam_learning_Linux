@@ -1,0 +1,7 @@
+#This ignores the .deb files
+*.deb
+
+#This ignores all archives
+*.tar
+*.zip
+*.rar
